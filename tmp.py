@@ -1,50 +1,54 @@
-import cv2
-import numpy as np
-from PIL import Image,ImageFont,ImageDraw
-from utils import get_min_box
-
-def get_text_img_tmp(
-        font_size=40,
-        font_type_path="STFANGSO.TTF",
-        text="测试ing中",
-        back_color=(255, 255, 255, 0),
-        font_color=(255, 0, 0, 255),
-        pad_size=10):
-    """ 画两倍框，再裁剪 """
-    text = text.replace("\n","")
-    text_len = len(text)
-    font = ImageFont.truetype(font_type_path, font_size, encoding="utf-8")
-    img_draw = Image.new('RGBA', ((text_len * font_size + pad_size) * 2, (font_size + pad_size) * 2), back_color)
-    draw = ImageDraw.Draw(img_draw)
-    draw.text((int(font_size * 0.1)+pad_size, int(font_size * 0.1)+pad_size), text, fill=font_color, font=font)
-    img = cv2.cvtColor(np.asarray(img_draw), cv2.COLOR_RGB2BGR)
-    box = get_min_box(img)
-    cut = img_draw.crop((box[0][0],box[0][1],box[1][0],box[1][1]))
-    cut.save("tmp.png")
-    return cut
-
-
-img_draw = get_text_img_tmp(back_color=(255, 255, 255, 0))
-img_draw = Image.open("tmp.png")
-# rot.show()
-from utils import my_rotate_PIL
-rot, coor = my_rotate_PIL(img_draw, angle=40)
-
-# img1 = cv2.cvtColor(np.asarray(rot), cv2.COLOR_RGBA2RGB)
-# cv2.line(img1,coor[0],coor[1],(0,255,0),3)
-# cv2.line(img1,coor[1],coor[2],(0,255,0),3)
-# cv2.line(img1,coor[2],coor[3],(0,255,0),3)
-# cv2.line(img1,coor[0],coor[3],(0,255,0),3)
-# cv2.imshow("img",img1)
-# cv2.waitKey(0)
-
-
-
-background = Image.open("1.png")
-foreground = rot#.resize((180,120))
-background.paste(foreground, (40, 80), foreground)
-background.show()
-# img = cv2.cvtColor(np.asarray(rot), cv2.COLOR_RGBA2BGRA)
+# import cv2, random
+# 
+# from utils import *
+# 
+# 
+# img = np.zeros((1080, 1920, 3), np.uint8)
+# triangle = np.array([(0, 122), (147, 0), (172, 30), (25, 152)])
+# 
+# cv2.fillConvexPoly(img, triangle, (255, 255, 255))
+# 
+# 
+# 
+# txts = open("ppocr_keys_v1.txt","r",encoding="utf-8").read().split("\n")
+# 
+# t = my_get_text(txts)
+# print(t)
+# 
+# img_draw = get_text_img(text=t)
+# rot, coor = my_rotate_PIL(img_draw, angle=40)
+# print(coor)
+# background = Image.open("1.png")
+# foreground = rot
+# 
+# start_point = (500,600)
+# box_list = [(start_point[0]+point[0],start_point[1]+point[1]) for point in coor]
+# 
+# background.paste(foreground,start_point, foreground)
+# # background.show()
+# 
+# img = cv2.cvtColor(np.asarray(background), cv2.COLOR_RGBA2BGR)
+# my_line_4point(img,box_list)
 # cv2.imshow("img",img)
 # cv2.waitKey(0)
-# print(1)
+
+
+import numpy as np
+import cv2
+
+def mask_bite(mask,arr):
+    img = np.zeros(mask.shape, np.uint8)
+    triangle = np.array(arr)
+    cv2.fillConvexPoly(img, triangle, (100, 100))
+    return True, img
+
+if __name__ == '__main__':
+
+    mask = np.zeros((1080,960), np.uint8)
+    arr = [[(500, 728), (652, 600), (677, 630)]]
+
+    flag,mask2=mask_bite(mask,arr)
+
+    cv2.imshow("1",mask)
+    cv2.imshow("2",mask2)
+    cv2.waitKey(0)
