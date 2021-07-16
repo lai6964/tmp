@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image,ImageFont,ImageDraw
 from utils import get_min_box
 
-def get_text_img_tmp(img_path="1.png",
+def get_text_img_tmp(
         font_size=40,
         font_type_path="STFANGSO.TTF",
         text="测试ing中",
@@ -17,21 +17,34 @@ def get_text_img_tmp(img_path="1.png",
     img_draw = Image.new('RGBA', ((text_len * font_size + pad_size) * 2, (font_size + pad_size) * 2), back_color)
     draw = ImageDraw.Draw(img_draw)
     draw.text((int(font_size * 0.1)+pad_size, int(font_size * 0.1)+pad_size), text, fill=font_color, font=font)
-    img = cv2.cvtColor(np.asarray(img_draw), cv2.COLOR_RGBA2BGRA)
+    img = cv2.cvtColor(np.asarray(img_draw), cv2.COLOR_RGB2BGR)
     box = get_min_box(img)
-    return img, box
+    cut = img_draw.crop((box[0][0],box[0][1],box[1][0],box[1][1]))
+    cut.save("tmp.png")
+    return cut
 
 
-img_draw, box = get_text_img_tmp()
-# w, h, c = cut_img.shape
-# img = cv2.imread("1.png")
-# start_point = (40, 100)
-# tmp_img = img[start_point[0]:start_point[0] + w, start_point[1]:start_point[1] + h]
-# image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+img_draw = get_text_img_tmp(back_color=(255, 255, 255, 0))
+img_draw = Image.open("tmp.png")
+# rot.show()
+from utils import my_rotate_PIL
+rot, coor = my_rotate_PIL(img_draw, angle=40)
+
+# img1 = cv2.cvtColor(np.asarray(rot), cv2.COLOR_RGBA2RGB)
+# cv2.line(img1,coor[0],coor[1],(0,255,0),3)
+# cv2.line(img1,coor[1],coor[2],(0,255,0),3)
+# cv2.line(img1,coor[2],coor[3],(0,255,0),3)
+# cv2.line(img1,coor[0],coor[3],(0,255,0),3)
+# cv2.imshow("img",img1)
+# cv2.waitKey(0)
+
+
 
 background = Image.open("1.png")
-foreground = Image.open("tmp.png")#Image.fromarray(cv2.cvtColor(img_draw, cv2.COLOR_BGR2RGB))
-foreground = img_draw.resize((1800,1200))
+foreground = rot#.resize((180,120))
 background.paste(foreground, (40, 80), foreground)
-
 background.show()
+# img = cv2.cvtColor(np.asarray(rot), cv2.COLOR_RGBA2BGRA)
+# cv2.imshow("img",img)
+# cv2.waitKey(0)
+# print(1)
