@@ -2,8 +2,44 @@ import numpy as np
 import cv2, math, random
 from PIL import Image, ImageFont, ImageDraw
 from shapely.geometry import Polygon
+from skimage.transform import warp, AffineTransform
+from skimage.exposure import equalize_adapthist
 
 
+def get_fontcolor(bg_img):
+    image = np.asarray(bg_img)
+    lab_image = cv2.cvtColor(image, cv2.COLOR_RGB2Lab)
+
+    bg = lab_image[:, :, 0]
+    l_mean = np.mean(bg)
+
+    new_l = random.randint(0, 127 - 80) if l_mean > 127 else random.randint(127 + 80, 255)
+    new_a = random.randint(0, 255)
+    new_b = random.randint(0, 255)
+
+    lab_rgb = np.asarray([[[new_l, new_a, new_b]]], np.uint8)
+    rbg = cv2.cvtColor(lab_rgb, cv2.COLOR_Lab2RGB)
+
+    r = rbg[0, 0, 0]
+    g = rbg[0, 0, 1]
+    b = rbg[0, 0, 2]
+
+    return (r, g, b, 255)
+
+
+def is_no_intersection(img,bboxes_list,coor):
+    w, h = img.size
+    tmp_w = max([c[0] for c in coor]) - min([c[0] for c in coor])
+    tmp_h = max([c[1] for c in coor]) - min([c[1] for c in coor])
+    start_point_x = random.randint(0,w-tmp_w)
+    start_point_y = random.randint(0,h-tmp_h)
+    bboxes = [(start_point_x+c[0],start_point_y+c[1]) for c in coor]
+    flag = True
+    for last_bboxes in bboxes_list:
+        if intersection(bboxes,last_bboxes)>0:
+            flag=False
+            break
+    return flag, (start_point_x,start_point_y)
 
 def get_min_box(img):
 
@@ -52,11 +88,12 @@ def get_text_img_ori(
     return img_draw, box, cut_img
 
 def get_text_img(
-        font_size=40,
-        font_type_path="STFANGSO.TTF",
+        font_size=40,####字号
+        font_type_path="STFANGSO.TTF",####字体
         text="测试ing中",
         back_color=(255, 255, 255, 0),
-        font_color=(255, 0, 0, 255),
+        font_color=(255, 0, 0, 255),####字色
+        font_wide=0,####字粗
         pad_size=10):
     """ 画两倍框，再裁剪 """
     text = text.replace("\n","")
@@ -64,7 +101,7 @@ def get_text_img(
     font = ImageFont.truetype(font_type_path, font_size, encoding="utf-8")
     img_draw = Image.new('RGBA', ((text_len * font_size + pad_size) * 2, (font_size + pad_size) * 2), back_color)
     draw = ImageDraw.Draw(img_draw)
-    draw.text((int(font_size * 0.1)+pad_size, int(font_size * 0.1)+pad_size), text, fill=font_color, font=font)
+    draw.text((int(font_size * 0.1)+pad_size, int(font_size * 0.1)+pad_size), text, fill=font_color, font=font, stroke_width=font_wide)
     img = cv2.cvtColor(np.asarray(img_draw), cv2.COLOR_RGB2BGR)
     box = get_min_box(img)
     cut = img_draw.crop((box[0][0],box[0][1],box[1][0],box[1][1]))
@@ -110,10 +147,10 @@ def my_line_4point(img,coor,color=(0,255,0),line_thick=3):
     return img
 
 
-def my_get_text(txts, max_num=5):
+def my_get_text(txts, num=5):
     txt = ""
-    length = len(txts)
-    for i in range(max_num):
+    length = len(txts)-1
+    for i in range(num):
         index = random.randint(0,length)
         txt = txt + txts[index]
     return txt
@@ -133,14 +170,112 @@ def intersection(g, p):
     else:
         return inter/union
 
-if __name__ == '__main__':
-    img_draw = Image.open("tmp.png")
-    rot, coor = my_rotate_PIL(img_draw)
 
-    img1 = cv2.cvtColor(np.asarray(rot), cv2.COLOR_RGBA2RGB)
-    cv2.line(img1,coor[0],coor[1],(0,255,0),3)
-    cv2.line(img1,coor[1],coor[2],(0,255,0),3)
-    cv2.line(img1,coor[2],coor[3],(0,255,0),3)
-    cv2.line(img1,coor[0],coor[3],(0,255,0),3)
-    cv2.imshow("img",img1)
-    cv2.waitKey(0)
+def augment_affine(
+        image,
+        bg_image,
+        bboxes=None,  # list of tuples
+        random_seed=0,
+        range_scale=(0.8, 1.2),  # percentage
+        range_translation=(-100, 100),  # in pixels
+        range_rotation=(-45, 45),  # in degrees
+        range_sheer=(-45, 45),  # in degrees
+):
+
+    # convert bboxes to x,y coordinates
+    if bboxes is not None:
+        ls_bboxes_coord = []
+        for box in bboxes:
+            tmp = [[x,y] for (x,y) in box]
+            ls_bboxes_coord.append(tmp)
+
+    # ------------------------------------------------------- get random values
+    # set random seed
+    np.random.seed(random_seed)
+    # degrees to radians
+    range_rotation = np.radians(range_rotation)
+    range_sheer = np.radians(range_sheer)
+
+    # get random values
+    param_scale = np.random.uniform(low=range_scale[0], high=range_scale[1])
+    param_trans_1 = np.random.randint(low=range_translation[0], high=range_translation[1])
+    param_trans_2 = np.random.randint(low=range_translation[0], high=range_translation[1])
+    param_rot = np.random.uniform(low=range_rotation[0], high=range_rotation[1])
+    param_sheer = np.random.uniform(low=range_sheer[0], high=range_sheer[1])
+
+    # -------------------------------------------- process all image variations
+    # configure an affine transform based on the random values
+    tform = AffineTransform(
+        scale=(param_scale, param_scale),
+        rotation=param_rot,
+        shear=param_sheer,
+        translation=(param_trans_1, param_trans_2)
+    )
+
+    image_transformed = warp(  # warp image (pixel range -> float [0,1])
+        image,
+        tform.inverse,
+        mode='edge'
+    )
+    # convert range back to [0,255]
+    image_transformed *= 255
+    image_transformed = image_transformed.astype(np.uint8)
+
+
+    # ------------- transform bboxes to the new coordinates of the warped image
+    flag_truncated = False
+    if bboxes is not None:
+        ls_bboxes_coord_new = []
+        for ls_bboxes_coord_tmp in ls_bboxes_coord:
+            if flag_truncated == True:
+                break
+            tmp_box = []
+            for j in range(4):
+                vector = np.array([ls_bboxes_coord_tmp[j][0], ls_bboxes_coord_tmp[j][1], 1])
+                new_coord = np.matmul(tform.params, vector)
+                x = int(round(new_coord[0]))
+                y = int(round(new_coord[1]))
+                tmp_box.append((x, y))
+            ls_bboxes_coord_new.append(tmp_box)
+
+    #### remain bboxes in image without outliers
+    h, w, _ = image_transformed.shape
+    mask = np.zeros((h, w))
+    remain_boxes = []
+    for box in ls_bboxes_coord_new:
+        box = [(x, y) for x, y in box]
+        flag = True
+        for x, y in box:
+            if x < 0 or x > w or y < 0 or y > h:
+                flag = False
+                break
+        if flag == True:
+            cv2.fillConvexPoly(mask, np.array(box), color=255)
+            remain_boxes.append(box)
+
+    bg_image_transformed = warp(bg_image, tform.inverse, mode='symmetric')
+    bg_image_transformed *= 255
+    bg_image_transformed = bg_image_transformed.astype(np.uint8)
+    bg_image_transformed[mask == 255] = image_transformed[mask == 255]
+    # cv2.imshow("mask",mask)
+    # cv2.imshow("out",bg_image_transformed)
+
+    return bg_image_transformed, remain_boxes
+
+if __name__ == '__main__':
+    # img_draw = Image.open("tmp.png")
+    # rot, coor = my_rotate_PIL(img_draw)
+    #
+    # img1 = cv2.cvtColor(np.asarray(rot), cv2.COLOR_RGBA2RGB)
+    # cv2.line(img1,coor[0],coor[1],(0,255,0),3)
+    # cv2.line(img1,coor[1],coor[2],(0,255,0),3)
+    # cv2.line(img1,coor[2],coor[3],(0,255,0),3)
+    # cv2.line(img1,coor[0],coor[3],(0,255,0),3)
+    # cv2.imshow("img",img1)
+    # cv2.waitKey(0)
+    lines = [[(227, 186), (427, 197), (425, 236), (225, 225)],
+[(231, 170), (432, 156), (435, 195), (234, 209)],
+[(265, 224), (466, 217), (467, 256), (266, 263)],
+[(176, 166), (413, 124), (420, 162), (183, 204)],
+[(53, 216), (293, 241), (289, 281), (49, 256)]]
+    print(intersection(lines[0],lines[1]))
