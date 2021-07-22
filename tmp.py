@@ -19,22 +19,25 @@ def create_new_data(img_path, txts, font_type_path_list):
 
         t = my_get_text(txts,num=txt_length)
         img_draw = get_text_img(text=t,font_size=font_size,font_type_path=font_type_path,font_color=font_color,font_wide=font_wide)
+        coor = [[0,0],[img_draw.size[0],0],[img_draw.size[0],img_draw.size[1]],[0,img_draw.size[1]]]
+        rot_img = img_draw
 
-
-        rot_img, coor = my_rotate_PIL2(img_draw, angle=angle)
+        #### 旋转
+        rot_img, coor = my_rotate_PIL2(rot_img, coor=coor, angle=angle)
         # rot_img.save("tmp1.png")
         # print(coor)
+
+        #### 透视变换
         rot_img = cv2.cvtColor(np.asarray(rot_img), cv2.COLOR_RGBA2BGRA)
-
-        bboxes_translate = [[random.randint(-int(rot_img.shape[1]/3),int(rot_img.shape[1]/3)),random.randint(-int(rot_img.shape[0]/3),int(rot_img.shape[0]/3))] for i in range(4)]
-        rot_img, perspect_M = my_perspective_img(rot_img,bboxes_translate)
-        coor = [my_perspective_point(point=c,M=perspect_M) for c in coor]
-
-
-        rot_img = Image.fromarray(cv2.cvtColor(rot_img,cv2.COLOR_BGRA2RGBA))
-
+        bboxes_translate = [[random.randint(-int(rot_img.shape[1] / 3), int(rot_img.shape[1] / 3)),
+                             random.randint(-int(rot_img.shape[0] / 3), int(rot_img.shape[0] / 3))] for i in range(4)]
+        rot_img, perspect_M = my_perspective_img(rot_img, bboxes_translate)
+        coor = [my_perspective_point(point=c, M=perspect_M) for c in coor]
+        rot_img = Image.fromarray(cv2.cvtColor(rot_img, cv2.COLOR_BGRA2RGBA))
         # rot_img.save("tmp2.png")
         # print(coor)
+
+
 
         flag, start_point = is_no_intersection(img,bboxes_list,coor)
         if flag:
