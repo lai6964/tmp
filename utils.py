@@ -5,7 +5,6 @@ from shapely.geometry import Polygon
 from skimage.transform import warp, AffineTransform
 from skimage.exposure import equalize_adapthist
 
-
 def get_fontcolor(bg_img):
     image = np.asarray(bg_img)
     lab_image = cv2.cvtColor(image, cv2.COLOR_RGB2Lab)
@@ -25,7 +24,6 @@ def get_fontcolor(bg_img):
     b = rbg[0, 0, 2]
 
     return (r, g, b, 255)
-
 
 def is_no_intersection(img,bboxes_list,coor):
     w, h = img.size
@@ -139,13 +137,48 @@ def my_rotate_PIL(img_draw, angle=30.0):
 
     return rot, coor
 
+def my_rotate_PIL2(img_draw, coor=None, angle=30.0):
+    """绕矩形图像img_draw中心旋转"""
+    angle = angle%360.0 ####逆时针多少度
+    angle_cv2 = -math.radians(angle)#angle
+    angle_cos = math.cos(angle_cv2)
+    angle_sin = math.sin(angle_cv2)
+    w, h = img_draw.size
+    if coor is None:
+        coor = [[0, 0], [w, 0], [w, h], [0, h]]
+
+    rotn_center = (w / 2.0, h / 2.0)#np.sum(coor, axis=0)/4.0
+
+    coor_w3 = (coor[3][0] - rotn_center[0]) * angle_cos - (coor[3][1] - rotn_center[1]) * angle_sin
+    coor_h3 = (coor[3][0] - rotn_center[0]) * angle_sin + (coor[3][1] - rotn_center[1]) * angle_cos
+
+    coor_w2 = (coor[2][0] - rotn_center[0]) * angle_cos - (coor[2][1] - rotn_center[1]) * angle_sin
+    coor_h2 = (coor[2][0] - rotn_center[0]) * angle_sin + (coor[2][1] - rotn_center[1]) * angle_cos
+
+    coor_w1 = (coor[1][0] - rotn_center[0]) * angle_cos - (coor[1][1] - rotn_center[1]) * angle_sin
+    coor_h1 = (coor[1][0] - rotn_center[0]) * angle_sin + (coor[1][1] - rotn_center[1]) * angle_cos
+
+    coor_w0 = (coor[0][0] - rotn_center[0]) * angle_cos - (coor[0][0] - rotn_center[1]) * angle_sin
+    coor_h0 = (coor[0][0] - rotn_center[0]) * angle_sin + (coor[0][0] - rotn_center[1]) * angle_cos
+
+    rot = img_draw.rotate(angle, expand=1)
+    w, h = rot.size
+    w = w / 2
+    h = h / 2
+    coor = [0, 1, 2, 3]
+    coor[0] = (int(w + coor_w0), int(h + coor_h0))
+    coor[1] = (int(w + coor_w1), int(h + coor_h1))
+    coor[2] = (int(w + coor_w2), int(h + coor_h2))
+    coor[3] = (int(w + coor_w3), int(h + coor_h3))
+
+    return rot, coor
+
 def my_line_4point(img,coor,color=(0,255,0),line_thick=3):
     cv2.line(img,coor[0],coor[1],color,line_thick)
     cv2.line(img,coor[1],coor[2],color,line_thick)
     cv2.line(img,coor[2],coor[3],color,line_thick)
     cv2.line(img,coor[0],coor[3],color,line_thick)
     return img
-
 
 def my_get_text(txts, num=5):
     txt = ""
@@ -154,7 +187,6 @@ def my_get_text(txts, num=5):
         index = random.randint(0,length)
         txt = txt + txts[index]
     return txt
-
 
 def intersection(g, p):
     g=np.asarray(g)
@@ -170,7 +202,6 @@ def intersection(g, p):
     else:
         return inter/union
 
-
 def augment_affine(
         image,
         bg_image,
@@ -179,7 +210,7 @@ def augment_affine(
         range_scale=(0.8, 1.2),  # percentage
         range_translation=(-100, 100),  # in pixels
         range_rotation=(-45, 45),  # in degrees
-        range_sheer=(-45, 45),  # in degrees
+        range_sheer=(-45, 45)  # in degrees
 ):
 
     # convert bboxes to x,y coordinates
@@ -215,7 +246,7 @@ def augment_affine(
     image_transformed = warp(  # warp image (pixel range -> float [0,1])
         image,
         tform.inverse,
-        mode='edge'
+        mode='constant'
     )
     # convert range back to [0,255]
     image_transformed *= 255
@@ -260,7 +291,46 @@ def augment_affine(
     # cv2.imshow("mask",mask)
     # cv2.imshow("out",bg_image_transformed)
 
-    return bg_image_transformed, remain_boxes
+    return bg_image_transformed, remain_boxes, image_transformed
+
+def my_perspective(img,bboxes_old,bboxes_new):
+    min_x = min([x for x,y in bboxes_new])
+    max_x = max([x for x,y in bboxes_new])
+    min_y = min([y for x,y in bboxes_new])
+    max_y = max([y for x,y in bboxes_new])
+    bboxes_new = [[x-min_x,y-min_y] for x,y in bboxes_new]
+    pts1 = np.float32(bboxes_old)
+    pts2 = np.float32(bboxes_new)
+    M = cv2.getPerspectiveTransform(pts1, pts2)
+    dst = cv2.warpPerspective(img, M, (max_x-min_x, max_y-min_y))
+    points = [my_perspective_point(box,M) for box in bboxes_old]
+    return dst, points
+
+def my_perspective_point(point,M):
+    point = [x for x in point]
+    point.append(1)
+    point = np.array(point, dtype=np.float32)
+    c = M @ point  # c = np.matmul(M,point)  一个意思
+    c = (c / c[2])
+    c = c[:2]
+    c = c.tolist()
+    c = [int(t) for t in c]
+    return c
+
+def my_perspective_img(img,bboxes_translate):
+    h, w, _ = img.shape
+    bboxes_old = [[0, 0], [w, 0], [w, h], [0, h]]
+    bboxes_new = [[old[0]+trans[0],old[1]+trans[1]] for old,trans in zip(bboxes_old,bboxes_translate)]
+    min_x = min([x for x,y in bboxes_new])
+    max_x = max([x for x,y in bboxes_new])
+    min_y = min([y for x,y in bboxes_new])
+    max_y = max([y for x,y in bboxes_new])
+    bboxes_new = [[x-min_x,y-min_y] for x,y in bboxes_new]
+    pts1 = np.float32(bboxes_old)
+    pts2 = np.float32(bboxes_new)
+    M = cv2.getPerspectiveTransform(pts1, pts2)
+    dst = cv2.warpPerspective(img, M, (max_x-min_x, max_y-min_y))
+    return dst, M
 
 if __name__ == '__main__':
     # img_draw = Image.open("tmp.png")
