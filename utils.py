@@ -221,8 +221,8 @@ def augment_affine(
             ls_bboxes_coord.append(tmp)
 
     # ------------------------------------------------------- get random values
-    # set random seed
-    np.random.seed(random_seed)
+#     # set random seed
+#     np.random.seed(random_seed)
     # degrees to radians
     range_rotation = np.radians(range_rotation)
     range_sheer = np.radians(range_sheer)
