@@ -158,8 +158,8 @@ def my_rotate_PIL2(img_draw, coor=None, angle=30.0):
     coor_w1 = (coor[1][0] - rotn_center[0]) * angle_cos - (coor[1][1] - rotn_center[1]) * angle_sin
     coor_h1 = (coor[1][0] - rotn_center[0]) * angle_sin + (coor[1][1] - rotn_center[1]) * angle_cos
 
-    coor_w0 = (coor[0][0] - rotn_center[0]) * angle_cos - (coor[0][0] - rotn_center[1]) * angle_sin
-    coor_h0 = (coor[0][0] - rotn_center[0]) * angle_sin + (coor[0][0] - rotn_center[1]) * angle_cos
+    coor_w0 = (coor[0][0] - rotn_center[0]) * angle_cos - (coor[0][1] - rotn_center[1]) * angle_sin
+    coor_h0 = (coor[0][0] - rotn_center[0]) * angle_sin + (coor[0][1] - rotn_center[1]) * angle_cos
 
     rot = img_draw.rotate(angle, expand=1)
     w, h = rot.size
